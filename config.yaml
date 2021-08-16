@@ -1,0 +1,15 @@
+---
+address: :8080
+log_level: 4
+protocol: unix
+backend: /tmp/echo.sock
+load_balancer:
+  rules:
+    - key: /v1
+      replica:  8
+    - key: /v2
+      replica: 8
+    - key: /v3
+      replica: 8
+
+
