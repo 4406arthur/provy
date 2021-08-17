@@ -73,10 +73,7 @@ func main() {
 	}
 	config := parseConfig(configFile)
 
-	logrus.SetFormatter(
-		&logrus.TextFormatter{
-			FullTimestamp: true,
-		})
+	logrus.SetFormatter(&logrus.JSONFormatter{})
 	logrus.SetOutput(os.Stdout)
 	logrus.SetLevel(4)
 	logger := logrus.WithFields(logrus.Fields{
@@ -95,10 +92,11 @@ func main() {
 	}
 	provy := cmd.NewReveseProxy(config.GetString("protocol"), config.GetString("backend"), directorFunc)
 	srv := &http.Server{
-		Handler: provy.Handler,
-		Addr:    config.GetString("address"),
+		Handler:  provy.Handler,
+		Addr:     config.GetString("address"),
+		ErrorLog: &log.Logger{},
 	}
 
-	logger.Infof("Starting reverse proxy on %s \n", config.GetString("address"))
+	logger.Infof("Starting reverse proxy on %s", config.GetString("address"))
 	srv.ListenAndServe()
 }

@@ -24,8 +24,8 @@ type Ring struct {
 }
 
 type Member struct {
-	Key     string
-	Replica int
+	Key     string `mapstructure:"key"`
+	Replica int    `mapstructure:"replica"`
 }
 
 func NewLoadBalancerUsecase(logger *logrus.Entry, members []Member) *CHLoadBalancer {
