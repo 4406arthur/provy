@@ -12,9 +12,36 @@ import (
 	"provy/load-balancer/usecase"
 	"runtime"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
+
+var (
+	// reqCnt *prometheus.CounterVec
+	reqDur prometheus.Summary
+)
+
+func init() {
+	// Declare metrics
+	// var instLabels = []string{"method", "code"}
+	// reqCnt = prometheus.NewCounterVec(
+	// 	prometheus.CounterOpts{
+	// 		Name: "http_requests_total",
+	// 		Help: "Number of http requests.",
+	// 	},
+	// 	instLabels,
+	// )
+	// prometheus.Register(reqCnt)
+
+	reqDur = prometheus.NewSummary(
+		prometheus.SummaryOpts{
+			Name: "proxy_responsetime_durations_microseconds",
+			Help: "Summary about the response time of the proxy requests counted in microseconds",
+		})
+	prometheus.Register(reqDur)
+}
 
 var usageStr = `
 Advance Reverse proxy
@@ -90,9 +117,21 @@ func main() {
 		logger.Infof("Get Hash-Id: %s distribute to path: %s", req.Header.Get("Hash-Id"), versionPath)
 		req.URL.Path = req.URL.Path + versionPath
 	}
-	provy := cmd.NewReveseProxy(config.GetString("protocol"), config.GetString("backend"), directorFunc)
+	provy := cmd.NewReveseProxy(config.GetString("protocol"), config.GetString("backend"), reqDur, directorFunc)
+	//setup HTTP request multiplexer
+	mux := http.NewServeMux()
+	//setup a check point
+	mux.HandleFunc("/proxy/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	//setup a metrics endpoint
+	mux.Handle("/proxy/metrics", promhttp.Handler())
+
+	//inject proxy handler
+	mux.Handle("/", provy.Handler())
+
 	srv := &http.Server{
-		Handler:  provy.Handler,
+		Handler:  mux,
 		Addr:     config.GetString("address"),
 		ErrorLog: &log.Logger{},
 	}
