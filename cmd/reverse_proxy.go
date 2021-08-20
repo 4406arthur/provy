@@ -7,17 +7,19 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 type ReverseProxy struct {
 	Protocol   string
 	Backend    string
 	Instrument prometheus.Summary
+	Logger     *logrus.Entry
 	//TODO: is possible have a template to config custom handler logic ???
 	Proxy *httputil.ReverseProxy
 }
 
-func NewReveseProxy(protocol, backend string, instrument prometheus.Summary, director func(*http.Request)) *ReverseProxy {
+func NewReveseProxy(logger *logrus.Entry, protocol, backend string, instrument prometheus.Summary, director func(*http.Request)) *ReverseProxy {
 
 	reverProxy := &httputil.ReverseProxy{
 		Director: director,
@@ -29,6 +31,7 @@ func NewReveseProxy(protocol, backend string, instrument prometheus.Summary, dir
 	}
 
 	return &ReverseProxy{
+		Logger:     logger,
 		Protocol:   protocol,
 		Backend:    backend,
 		Instrument: instrument,
@@ -42,5 +45,11 @@ func (p *ReverseProxy) Handler() http.HandlerFunc {
 		p.Proxy.ServeHTTP(w, r)
 		elapsed := float64(time.Since(now)) / float64(time.Microsecond)
 		p.Instrument.Observe(elapsed)
+		p.Logger.WithFields(logrus.Fields{
+			"Direction":     "RP",
+			"RequestID":     r.Header.Get("Request-Id"),
+			"Hash-Id":       r.Header.Get("Hash-Id"),
+			"elapsedMSTime": elapsed,
+		}).Info("")
 	})
 }
