@@ -106,22 +106,12 @@ func main() {
 	logger := logrus.WithFields(logrus.Fields{
 		"service": "reverse-proxy",
 	})
-	var rules []usecase.Member
-	config.UnmarshalKey("load_balancer.rules", &rules)
-	lb := usecase.NewLoadBalancerUsecase(logger, rules)
+	//var rules []usecase.member
+	var chCfg map[string][]usecase.Member
+	config.UnmarshalKey("ch_router", &chCfg)
+	// logger.Println("%v", lbCfg["sc"])
+	//lb := usecase.NewLoadBalancerUsecase(logger, rules)
 
-	directorFunc := func(req *http.Request) {
-		req.URL.Scheme = "http"
-		req.URL.Host = req.Host
-		versionPath := lb.Locate(req.Header.Get("Hash-Id"))
-		logger.WithFields(logrus.Fields{
-			"Direction": "RQ",
-			"RequestID": req.Header.Get("Request-Id"),
-			"Hash-Id":   req.Header.Get("Hash-Id"),
-		}).Infof("distribute to path: %s", versionPath)
-		req.URL.Path = req.URL.Path + versionPath
-	}
-	provy := cmd.NewReveseProxy(logger, config.GetString("protocol"), config.GetString("backend"), reqDur, directorFunc)
 	//setup HTTP request multiplexer
 	mux := http.NewServeMux()
 	//setup a check point
@@ -132,7 +122,22 @@ func main() {
 	mux.Handle("/proxy/metrics", promhttp.Handler())
 
 	//inject proxy handler
-	mux.Handle("/", provy.Handler())
+	for path, rule := range chCfg {
+		lb := usecase.NewLoadBalancerUsecase(logger, rule)
+		directorFunc := func(req *http.Request) {
+			req.URL.Scheme = "http"
+			req.URL.Host = req.Host
+			versionPath := lb.Locate(req.Header.Get("Hash-Id"))
+			logger.WithFields(logrus.Fields{
+				"Direction": "RQ",
+				"RequestID": req.Header.Get("Request-Id"),
+				"Hash-Id":   req.Header.Get("Hash-Id"),
+			}).Infof("distribute to path: %s", versionPath)
+			req.URL.Path = req.URL.Path + versionPath
+		}
+		provy := cmd.NewReveseProxy(logger, config.GetString("protocol"), config.GetString("backend"), reqDur, directorFunc)
+		mux.Handle("/"+path, provy.Handler())
+	}
 
 	srv := &http.Server{
 		Handler:  mux,
