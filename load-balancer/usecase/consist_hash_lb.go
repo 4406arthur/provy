@@ -17,9 +17,9 @@ type Hash func(data []byte) uint32
 
 // Ring constains all hashed keys
 type Ring struct {
-	Hash Hash
-	//replicas int
+	Hash    Hash
 	Keys    []int // Sorted
+	VNodes  int
 	HashMap map[int]string
 }
 
@@ -44,6 +44,7 @@ func NewLoadBalancerUsecase(logger *logrus.Entry, members []Member) *CHLoadBalan
 		}
 	}
 	sort.Ints(ring.Keys)
+	ring.VNodes = len(ring.Keys)
 
 	return &CHLoadBalancer{
 		Logger: logger,
@@ -63,7 +64,11 @@ func (lb *CHLoadBalancer) Locate(key string) string {
 		return lb.Ring.Keys[i] >= hash
 	})
 
-	return lb.Ring.HashMap[lb.Ring.Keys[idx%len(lb.Ring.Keys)]]
+	if idx == lb.Ring.VNodes {
+		idx = 0
+	}
+
+	return lb.Ring.HashMap[lb.Ring.Keys[idx]]
 }
 
 // testing ussage
